@@ -1,0 +1,17 @@
+# Example: put any TLS proxy in front of port 8080 for TWEAKLINE_DOMAIN, then run `docker compose exec relay node tweakline.js pair --data /data`.
+name: tweakline
+
+services:
+  relay:
+    build: .
+    image: tweakline-relay
+    restart: unless-stopped
+    read_only: true
+    command: serve --host 0.0.0.0 --port 8080 --domain ${TWEAKLINE_DOMAIN:?set TWEAKLINE_DOMAIN} --data /data --no-local --no-pair-link --trust-proxy
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - tweakline-data:/data
+
+volumes:
+  tweakline-data:

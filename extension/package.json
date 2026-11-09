@@ -1,0 +1,17 @@
+{
+  "name": "tweakline-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "e2e": "node --test --test-concurrency=1 test/e2e/all.test.mjs",
+    "e2e:install": "playwright-core install chromium"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

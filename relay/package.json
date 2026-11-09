@@ -1,0 +1,28 @@
+{
+  "name": "tweakline-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-timeout=60000 test/*.test.mjs",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "ws": "^8.18.0",
+    "zod": "4.6.7"
+  },
+  "version": "0.1.0",
+  "description": "Tweakline server: connect any AI to a real browser page, by session address or MCP",
+  "bin": {
+    "tweakline": "dist/tweakline.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist/tweakline.cjs"
+  ],
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

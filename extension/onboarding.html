@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tweakline</title>
+<style>
+  :root { --p-bg: #0b0c0e; --p-fg: #e8eaf0; --p-muted: #adb4be; --p-line: rgba(255,255,255,.08); --p-strong: rgba(255,255,255,.14); --surf: #15171b; --prim: linear-gradient(135deg,#6e8bff,#7c5cff); --accent: #6e8bff; --accent-soft: rgba(110,139,255,.15); --accent-fg: #8da2ff; --ok: #34c77b; --warn: #f7b548; --warn-bg: rgba(247,181,72,.12); --danger: #ff7a8f; --font: Inter,system-ui,-apple-system,"Segoe UI",sans-serif; --mono: "JetBrains Mono",ui-monospace,monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--p-bg); color: var(--p-fg); font: 15px/1.45 var(--font); }
+  main { max-width: 560px; margin: 0 auto; padding: 40px 16px 56px; }
+  h1 { margin: 0 0 6px; font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
+  h2 { margin: 0 0 10px; padding-top: 3px; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .nb { white-space: nowrap; }
+  p { margin: 0; color: var(--p-muted); font-size: 14px; }
+  a { color: var(--accent-fg); }
+  code { font: 13px var(--mono); overflow-wrap: anywhere; }
+  .steps { margin: 28px 0 0; padding: 0; list-style: none; counter-reset: step; }
+  .steps > li { position: relative; padding: 0 0 28px 40px; counter-increment: step; }
+  .steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent-fg); font-size: 14px; font-weight: 600; }
+  .steps > li:not(:last-child)::after { content: ""; position: absolute; left: 13.5px; top: 34px; bottom: 6px; width: 1px; background: var(--p-strong); }
+  .steps > li:last-child { padding-bottom: 0; }
+  .steps > li:last-child h2 { margin: 0; }
+  .steps > li.done::before { content: "\2713"; background: rgba(52,199,123,.15); color: var(--ok); }
+  .steps > li.done h2 { color: var(--p-muted); }
+  .steps > li.now::before { background: var(--prim); color: #fff; }
+  .steps > li.now h2 { color: var(--p-fg); }
+  #pairMsg code, #localStatus code { padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,.08); color: inherit; font-size: 12.5px; white-space: nowrap; }
+  .clabel { margin: 12px 0 6px; color: var(--p-muted); font-size: 13px; }
+  h2 + .clabel { margin-top: 0; }
+  .copybox { display: flex; align-items: flex-start; gap: 8px; min-height: 44px; padding: 8px 4px 8px 12px; border: 1px solid var(--p-strong); border-radius: 10px; background: var(--surf); }
+  .copybox > span { flex: 1; min-width: 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+  .copybox > span#serveCommand { font-family: var(--mono); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 14px; border: 1px solid var(--p-strong); border-radius: 10px; background: none; color: var(--p-fg); font: 500 14px/1 var(--font); white-space: nowrap; cursor: pointer; }
+  .btn:hover { background: var(--surf); }
+  .btn.pri { background: var(--prim); border-color: transparent; color: #fff; font-weight: 600; }
+  .btn.pri:hover { filter: brightness(1.08); }
+  .btn.small { flex: none; height: 32px; padding: 0 10px; font-size: 13px; border-radius: 8px; background: var(--p-bg); }
+  .pairrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pairrow .btn { flex: 1 0 auto; }
+  .pairrow input { flex: 100 1 240px; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--p-strong); border-radius: 10px; background: var(--surf); color: var(--p-fg); font: 14px var(--font); outline: 0; }
+  .pairrow input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .good, .bad, #openWarn, #localStatus:not(:empty) { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
+  .good { background: rgba(52,199,123,.12); color: var(--ok); }
+  .bad { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+  #openWarn { background: var(--warn-bg); color: var(--warn); }
+  #localStatus:not(:empty) { background: var(--surf); }
+  #pairMsg:not(.good):not(.bad):not(:empty) { margin-top: 10px; font-size: 13px; }
+  details { margin-top: 12px; color: var(--p-muted); font-size: 13px; }
+  summary { cursor: pointer; min-height: 24px; }
+  details p { margin-top: 6px; font-size: 13px; }
+  .quiet { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--p-line); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tweakline is installed</h1>
+  <p>Notes on any page, and a chat with your AI that can see and change the page.</p>
+
+  <ol class="steps">
+    <li>
+      <h2>Start a server next to your AI</h2>
+      <div class="clabel">Ask your AI</div>
+      <div class="copybox"><span id="askText">Install Tweakline using the AI instructions in the README: https://github.com/<wbr>vadzimsharai/<wbr>tweakline</span><button class="btn small" id="copyAsk" data-copy-from="askText">Copy</button></div>
+      <div class="clabel">Or run it yourself</div>
+      <div class="copybox"><span id="serveCommand">curl <span class="nb">-fLO</span> https://github.com/<wbr>vadzimsharai/<wbr>tweakline/<wbr>releases/<wbr>latest/<wbr>download/<wbr>tweakline-server.js &amp;&amp; node tweakline-server.js</span><button class="btn small" id="copyServe" data-copy-from="serveCommand">Copy</button></div>
+      <p id="localStatus" role="status"></p>
+      <details>
+        <summary>Using a phone?</summary>
+        <p>A phone can't reach a server that listens only on your computer. Keep it there and put an HTTPS reverse proxy or tunnel on the same machine in front of it, then give the server that domain: <code>node tweakline-server.js --domain your.domain --no-local</code></p>
+        <p>If the proxy runs in a container, add <code>--trust-proxy</code> so the server sees real client addresses.</p>
+      </details>
+    </li>
+    <li>
+      <h2>Paste the link it prints</h2>
+      <div class="pairrow">
+        <input id="pairInput" placeholder="https://address/pair#code" aria-label="Link from your server" autocomplete="off" spellcheck="false">
+        <button class="btn pri" id="pairGo">Connect</button>
+      </div>
+      <div id="openBox" hidden>
+        <p id="openWarn"></p>
+        <div class="actions"><button class="btn" id="openNo">Cancel</button><button class="btn pri" id="openYes">Connect without encryption</button></div>
+      </div>
+      <p id="pairMsg" role="status"></p>
+    </li>
+    <li>
+      <h2>Open any page and tap the small tab at the screen edge</h2>
+    </li>
+  </ol>
+
+  <p class="quiet">Notes, screenshots and patches already work without a server.</p>
+</main>
+<script src="onboarding.js"></script>
+</body>
+</html>

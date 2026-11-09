@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+here="$(dirname "$(readlink -f "$0")")"
+relay="$here/../../../relay"
+release_url="https://github.com/vadzimsharai/tweakline/releases/latest/download/tweakline-server.js"
+if [[ -f "$relay/cli.mjs" ]]; then
+  if [[ "${1:-}" == update ]]; then
+    echo "tweakline runs from a repository checkout here: update it with git pull" >&2
+    exit 1
+  fi
+  # stdout belongs to the command: `tweakline mcp` speaks JSON-RPC on it.
+  [[ -d "$relay/node_modules/@modelcontextprotocol" ]] || npm ci --prefix "$relay" >&2
+  exec node "$relay/cli.mjs" "$@"
+fi
+# Installed from tweakline-skill.zip, without the repository: run the released server file.
+server="$here/tweakline-server.js"
+download() {
+  local partial
+  partial="$(mktemp "$server.XXXXXX")"
+  if ! curl -fL "$release_url" -o "$partial" >&2; then
+    rm -f "$partial"
+    echo "tweakline: download of $release_url failed" >&2
+    exit 1
+  fi
+  chmod 644 "$partial"
+  mv -f "$partial" "$server"
+}
+if [[ "${1:-}" == update ]]; then
+  download
+  echo "tweakline: updated $server" >&2
+  exit 0
+fi
+[[ -f "$server" ]] || download
+exec node "$server" "$@"

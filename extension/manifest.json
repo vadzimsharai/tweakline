@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Tweakline",
+  "version": "0.1.0",
+  "description": "Notes, chat with any AI, quick page edits and patches right on the page.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabs", "webNavigation", "scripting", "storage", "debugger", "alarms", "userScripts", "clipboardWrite", "unlimitedStorage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "options_page": "onboarding.html",
+  "action": { "default_title": "Tweakline: hide or show" },
+  "commands": {
+    "toggle": { "suggested_key": { "default": "Alt+Shift+W" }, "description": "Hide or show Tweakline" },
+    "chat": { "suggested_key": { "default": "Alt+Shift+C" }, "description": "Open or close chat" },
+    "shot": { "suggested_key": { "default": "Alt+Shift+S" }, "description": "Screenshot and copy" },
+    "note-arrow": { "suggested_key": { "default": "Alt+Shift+A" }, "description": "Note: arrow" },
+    "note-point": { "description": "Note: point" },
+    "note-rect": { "description": "Note: box" },
+    "video": { "description": "Start or stop video" },
+    "gallery": { "description": "Gallery" },
+    "patches": { "description": "Patches" }
+  },
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "run_at": "document_idle",
+    "js": ["ui/styles.js", "ui/styles-system.js", "ui/styles-panels.js", "ui/styles-chat.js", "ui/markup.js", "ui/core.js", "ui/gestures.js", "ui/dialogs.js", "ui/markdown.js", "ui/chat.js", "ui/sessions.js", "ui/notes.js", "ui/media.js", "ui/patches.js", "ui/boot.js"]
+  }]
+}

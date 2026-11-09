@@ -1,0 +1,39 @@
+name: Bug report
+description: Something in the extension, the server or the skill does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Security problems go to a private advisory, see SECURITY.md. Do not paste tokens, pair links or session addresses.
+  - type: dropdown
+    id: part
+    attributes:
+      label: Part
+      options: [Extension, Server, MCP, AI skill, Not sure]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps to reproduce, what you expected and what you saw.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Tweakline version (`node tweakline-server.js status` or the extension's version), browser and OS, Node.js version.
+    validations:
+      required: true
+  - type: input
+    id: ai
+    attributes:
+      label: AI client
+      description: Which AI and how it connects (session address or MCP), if relevant.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server output or the extension's service worker console.
+      render: text
