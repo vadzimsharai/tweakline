@@ -1,5 +1,5 @@
 import { patchMatches } from '../lib/gate.js';
-import { pageTarget, runPageJs } from '../lib/ops.js';
+import { applyPageCss, cssKey, removePageCss, runPageJs } from '../lib/ops.js';
 import { createPatches } from '../lib/patches.js';
 import { getServers, getTabSessions, store } from './storage.js';
 import { sendToTab, topFrame } from './tabs.js';
@@ -9,6 +9,7 @@ const DONE = Object.freeze({ ok: true });
 const PAGE_CHANGED = 'the page changed, open the patches again';
 
 const failed = (error) => ({ ok: false, reason: error.message });
+const patchCssKey = (patch) => `patch-${cssKey(patch.id)}`;
 
 // The scope is checked on the document the code then runs in: a tab that moved on meanwhile refuses it.
 async function runPatchJs(tabId, patch, code, page) {
@@ -20,7 +21,7 @@ async function runPatchJs(tabId, patch, code, page) {
 async function applyPatch(tabId, patch, page = null) {
   if (patch.css) {
     try {
-      await chrome.scripting.insertCSS({ target: pageTarget(tabId, page?.documentId), css: patch.css, origin: 'USER' });
+      await applyPageCss(tabId, page?.documentId, patch.css, patchCssKey(patch));
     } catch (error) {
       return failed(error);
     }
@@ -39,7 +40,7 @@ async function applyPatch(tabId, patch, page = null) {
 async function removePatch(tabId, patch) {
   if (patch.css) {
     try {
-      await chrome.scripting.removeCSS({ target: { tabId }, css: patch.css, origin: 'USER' });
+      await removePageCss(tabId, undefined, patch.css, patchCssKey(patch));
     } catch (error) {
       return failed(error);
     }

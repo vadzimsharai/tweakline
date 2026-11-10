@@ -17,8 +17,8 @@
 
 ## Extension permissions
 
-- **`debugger`** attaches the Chrome DevTools protocol to one tab for one action: a screenshot of a tab that is not in front, screen video, and the AI's JavaScript when user scripts are off. While it is attached, Chrome shows a bar "Tweakline started debugging this browser". It runs only for actions the person's grant allows, or that the person started.
-- **`userScripts`** runs the AI's JavaScript in the page's own world, after the grant check. It works only after **Allow User Scripts** is turned on for the extension; otherwise `debugger` is used.
+- **`debugger`** attaches the Chrome DevTools protocol to one tab for one action: a screenshot of a tab that is not in front, screen video, and the AI's JavaScript when neither user scripts nor `scripting` in the page's world can run it. While it is attached, Chrome shows a bar "Tweakline started debugging this browser". It runs only for actions the person's grant allows, or that the person started.
+- **`userScripts`** runs the AI's JavaScript in the page's own world, after the grant check. It works only after **Allow User Scripts** is turned on for the extension. Otherwise, or when the browser answers without running the code (seen on Android), `scripting.executeScript` runs it with `eval` in the page's own world of the granted document; `debugger` is the last resort, for pages whose CSP forbids `eval`. Every way must report that the code started, so a silent no-op is an error, never "applied".
 - **`<all_urls>`** lets the extension draw notes and the chat on any page. Page actions still need a grant.
 
 ## Limits

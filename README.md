@@ -89,8 +89,8 @@ To update, run `node tweakline-server.js update` and restart the server. It down
 
 Chrome asks for two permissions that need a word:
 
-- `debugger` takes screenshots of a tab that is not in front, records screen video, and runs the AI's JavaScript when user scripts are off. While it is attached, Chrome shows a bar "Tweakline started debugging this browser". It goes away when the action ends.
-- `userScripts` runs the AI's JavaScript in the page. Turn on **Allow User Scripts** on the extension's details page, otherwise the extension falls back to `debugger`.
+- `debugger` takes screenshots of a tab that is not in front, records screen video, and runs the AI's JavaScript when the page forbids `eval`. While it is attached, Chrome shows a bar "Tweakline started debugging this browser". It goes away when the action ends.
+- `userScripts` runs the AI's JavaScript in the page. Turn on **Allow User Scripts** on the extension's details page. Without it the extension runs the code in the page's own world through `scripting`, and uses `debugger` only when the page's Content-Security-Policy forbids `eval`.
 
 **3. Connect.** Tap the small tab at the edge of any page, open the menu, **Servers → Add server**, and paste the pair link. Then **Connect AI**, choose this page or the whole browser, and copy the address.
 

@@ -9,8 +9,8 @@ const MS_PER_SECOND = 1000;
 // The document the grant was checked on: a page that navigated meanwhile refuses the injection instead of running it.
 export const pageTarget = (tabId, documentId) => (documentId ? { tabId, documentIds: [documentId] } : { tabId });
 
-async function inPage({ tabId, documentId }, func, args = []) {
-  const [injection] = await chrome.scripting.executeScript({ target: pageTarget(tabId, documentId), func, args });
+async function inPage({ tabId, documentId }, func, args = [], world = 'ISOLATED') {
+  const [injection] = await chrome.scripting.executeScript({ target: pageTarget(tabId, documentId), func, args, world });
   if (injection?.error) throw new Error(injection.error.message || 'page script failed');
   return injection?.result;
 }
@@ -79,8 +79,14 @@ export function guardSource(grants) {
 // A patch is checked against one address; the debugger runs it only while the page is still there.
 export const addressGuardSource = (url) => `if (location.href !== ${JSON.stringify(String(url))}) throw new Error('the page changed, try again');\n`;
 
+const DEBUGGER_UNAVAILABLE = 'debugger unavailable';
+
 async function runWithDebugger(tabId, code, guard, onlyAt) {
-  await chrome.debugger.attach({ tabId }, DEBUGGER_VERSION);
+  try {
+    await chrome.debugger.attach({ tabId }, DEBUGGER_VERSION);
+  } catch (error) {
+    throw new Error(`${DEBUGGER_UNAVAILABLE}: ${error.message}`);
+  }
   try {
     const expression = `${guard ? guardSource(guard) : ''}${onlyAt ? addressGuardSource(onlyAt) : ''}${code}`;
     const { result, exceptionDetails } = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
@@ -97,19 +103,136 @@ export function runPageJs(tabId, code, { documentId, guard, onlyAt } = {}) {
 }
 
 const USER_SCRIPTS_OFF = /disabled|not allowed|developer|permission|User scripts/i;
+const NONCE_BYTES = 12;
+const RUN_MARK_PREFIX = 'tweakline-ran-';
 
-// Only an unavailable userScripts API falls back to the debugger; an error thrown by the page code is the answer, never a reason to run it twice.
-async function executePageJs(tabId, code, documentId, guard, onlyAt) {
-  let injections = null;
+export const newNonce = () => [...crypto.getRandomValues(new Uint8Array(NONCE_BYTES))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+// Some Android browsers answer userScripts.execute without running anything: the code first announces itself, so a silent no-op is told apart from a run.
+export const markedCode = (code, mark) => `document.dispatchEvent(new CustomEvent(${JSON.stringify(mark)}));\n${code}`;
+
+// Runs in the extension's isolated world, which sees the page's DOM events but not its globals.
+function armRunMark(mark) {
+  const marks = globalThis.__tweaklineRunMarks ??= new Map();
+  const entry = { heard: false, listener: () => { entry.heard = true; } };
+  marks.set(mark, entry);
+  document.addEventListener(mark, entry.listener, { once: true });
+  return true;
+}
+
+function takeRunMark(mark) {
+  const marks = globalThis.__tweaklineRunMarks;
+  const entry = marks?.get(mark);
+  if (!entry) return false;
+  marks.delete(mark);
+  document.removeEventListener(mark, entry.listener);
+  return entry.heard;
+}
+
+// A document that went away meanwhile (the code navigated) cannot be asked: the code started, so its answer stands.
+const heardRunMark = (page, mark) => inPage(page, takeRunMark, [mark]).catch(() => true);
+
+// Runs in the page's own world: indirect eval keeps the value of the last statement, as a script would. A <script> element added by a content script does not run in MV3, the extension's own CSP blocks it.
+function evalInPage(code) {
+  try { (0, eval)('0'); } catch { return { blocked: "the page's Content-Security-Policy blocks eval" }; }
+  const done = (value) => {
+    if (value === undefined) return { ok: true };
+    try { return { ok: true, value: JSON.parse(JSON.stringify(value) ?? 'null') }; } catch { return { ok: true, value: String(value) }; }
+  };
+  const fail = (error) => ({ ok: false, error: String((error && error.stack) || error) });
   try {
-    if (chrome.userScripts?.execute) injections = await chrome.userScripts.execute({ target: pageTarget(tabId, documentId), world: 'MAIN', js: [{ code }] });
+    return Promise.resolve((0, eval)(code)).then(done, fail);
   } catch (error) {
-    if (!USER_SCRIPTS_OFF.test(error.message)) throw error;
+    return fail(error);
   }
-  if (!injections) return runWithDebugger(tabId, code, guard, onlyAt);
-  const [first] = injections;
-  if (first?.error) throw new Error(first.error);
-  return first?.result;
+}
+
+// Only an unavailable or silent userScripts API moves on to the page world, and only a page that forbids eval to the debugger; an error thrown by the page code is the answer, never a reason to run it twice.
+async function executePageJs(tabId, code, documentId, guard, onlyAt) {
+  const page = { tabId, documentId };
+  if (chrome.userScripts?.execute) {
+    const mark = `${RUN_MARK_PREFIX}${newNonce()}`;
+    await inPage(page, armRunMark, [mark]);
+    let injections = null;
+    try {
+      injections = await chrome.userScripts.execute({ target: pageTarget(tabId, documentId), world: 'MAIN', js: [{ code: markedCode(code, mark) }] });
+    } catch (error) {
+      if (!USER_SCRIPTS_OFF.test(error.message)) throw error;
+    }
+    const [first] = injections || [];
+    if (first?.error) throw new Error(first.error);
+    const ran = await heardRunMark(page, mark);
+    if (injections && ran) return first?.result;
+  }
+  const answer = await inPage(page, evalInPage, [code], 'MAIN');
+  if (answer?.ok) return answer.value;
+  if (answer?.ok === false) throw new Error(answer.error);
+  const blocked = answer?.blocked || 'the browser did not run it in the page';
+  const mark = `${RUN_MARK_PREFIX}${newNonce()}`;
+  await inPage(page, armRunMark, [mark]);
+  let value;
+  try {
+    value = await runWithDebugger(tabId, markedCode(code, mark), guard, onlyAt);
+  } catch (error) {
+    if (error.message.startsWith(DEBUGGER_UNAVAILABLE)) throw new Error(`JS did not run: ${blocked}, and the ${error.message}`);
+    throw error;
+  }
+  if (!await heardRunMark(page, mark)) throw new Error(`JS did not run: ${blocked}, and the debugger answered without running it`);
+  return value;
+}
+
+const CSS_MARK_PREFIX = '--tweakline-applied-';
+
+// The mark goes first, so a broken rule in the CSS itself cannot hide it.
+export const markedCss = (css, key) => `:root{${CSS_MARK_PREFIX}${key}:1}\n${css}`;
+export const cssKey = (value) => String(value).replace(/[^\w-]/g, '_');
+
+function cssMarkComputes(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() === '1';
+}
+
+// A stylesheet adopted by the document: the page's DOM is shared with the isolated world, and the page's CSP does not cover it.
+function adoptSheet(key, css, markName) {
+  const sheets = globalThis.__tweaklineSheets ??= new Map();
+  const old = sheets.get(key);
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(css);
+  sheets.set(key, sheet);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets.filter((s) => s !== old), sheet];
+  return getComputedStyle(document.documentElement).getPropertyValue(markName).trim() === '1';
+}
+
+function dropSheet(key) {
+  const sheets = globalThis.__tweaklineSheets;
+  const sheet = sheets?.get(key);
+  if (!sheet) return false;
+  sheets.delete(key);
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== sheet);
+  return true;
+}
+
+// Some Android browsers resolve insertCSS without applying it: a mark rule is read back, and an adopted stylesheet takes over when it does not compute.
+export async function applyPageCss(tabId, documentId, css, key) {
+  const page = { tabId, documentId };
+  const target = pageTarget(tabId, documentId);
+  const marked = markedCss(css, key);
+  const markName = `${CSS_MARK_PREFIX}${key}`;
+  let refused = '';
+  try {
+    await chrome.scripting.insertCSS({ target, css: marked, origin: 'USER' });
+    if (await inPage(page, cssMarkComputes, [markName])) return 'user';
+    await chrome.scripting.removeCSS({ target, css: marked, origin: 'USER' }).catch(() => {});
+  } catch (error) {
+    refused = ` (insertCSS: ${error.message})`;
+  }
+  if (await inPage(page, adoptSheet, [key, marked, markName])) return 'sheet';
+  await inPage(page, dropSheet, [key]).catch(() => {});
+  throw new Error(`CSS did not take effect${refused}: the browser ignored both the injected style and a stylesheet on the page`);
+}
+
+export async function removePageCss(tabId, documentId, css, key) {
+  await inPage({ tabId, documentId }, dropSheet, [key]);
+  await chrome.scripting.removeCSS({ target: pageTarget(tabId, documentId), css: markedCss(css, key), origin: 'USER' });
 }
 
 // Long enough to read that the page is about to reload.
@@ -139,9 +262,11 @@ export function createOps({ undoStacks, captureAndStore, proposePatch, noteBefor
     shot: ({ tabId, documentId, session }) => captureAndStore(tabId, session, documentId),
     css: async ({ tabId, documentId, args, session }) => {
       await noteBefore(tabId, documentId);
-      await chrome.scripting.insertCSS({ target: pageTarget(tabId, documentId), css: String(args.css), origin: 'USER' });
-      pushUndo(tabId, { kind: 'css', css: String(args.css), note: args.note, session });
-      return { applied: true };
+      const css = String(args.css);
+      const key = newNonce();
+      const via = await applyPageCss(tabId, documentId, css, key);
+      pushUndo(tabId, { kind: 'css', css, key, note: args.note, session });
+      return { applied: true, via };
     },
     js: async ({ tabId, documentId, guard, args, session }) => {
       await noteBefore(tabId, documentId);
@@ -152,7 +277,7 @@ export function createOps({ undoStacks, captureAndStore, proposePatch, noteBefor
     undo: async ({ tabId, documentId, guard, session }) => {
       const step = popUndo(undoStacks, tabId, session);
       if (!step) return { undone: false };
-      if (step.kind === 'css') await chrome.scripting.removeCSS({ target: pageTarget(tabId, documentId), css: step.css, origin: 'USER' });
+      if (step.kind === 'css') await removePageCss(tabId, documentId, step.css, step.key);
       else if (step.undo) await runPageJs(tabId, step.undo, { documentId, guard });
       else {
         await beforeReload(tabId);

@@ -41,7 +41,14 @@ function patchSource(out, file, from, to, { all = false } = {}) {
   fs.writeFileSync(target, all ? source.replaceAll(from, to) : source.replace(from, to));
 }
 
-export function buildExtension(localPort, aiStaleMs = DEFAULT_AI_STALE_MS) {
+// Some Android browsers resolve insertCSS and userScripts.execute without doing anything; the debugger may not attach there either.
+const SILENT_INJECTION = `chrome.scripting.insertCSS = async () => {};
+chrome.scripting.removeCSS = async () => {};
+if (chrome.userScripts) chrome.userScripts.execute = async () => [{ result: null, frameId: 0 }];
+chrome.debugger.attach = async () => { throw new Error('Cannot attach to this target'); };
+`;
+
+export function buildExtension(localPort, aiStaleMs = DEFAULT_AI_STALE_MS, { silentInjection = false } = {}) {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'wg-ext-'));
   fs.cpSync(EXTENSION, out, { recursive: true, filter: (p) => !p.includes(`${path.sep}test`) && !p.includes(`${path.sep}node_modules`) });
   // Tests need to see inside the UI; shipped builds keep the shadow roots closed.
@@ -50,6 +57,10 @@ export function buildExtension(localPort, aiStaleMs = DEFAULT_AI_STALE_MS) {
   patchSource(out, 'lib/servers.js', 'const DEFAULT_PORT = 8787;', `const DEFAULT_PORT = ${localPort};`);
   // The real 90 seconds would make the stale line untestable.
   patchSource(out, 'ui/chat.js', 'const AI_STALE_MS = 90000;', `const AI_STALE_MS = ${aiStaleMs};`);
+  if (silentInjection) {
+    const background = path.join(out, 'background.js');
+    fs.writeFileSync(background, SILENT_INJECTION + fs.readFileSync(background, 'utf8'));
+  }
   return out;
 }
 
@@ -152,7 +163,7 @@ export async function startNoSocketServer() {
   return { base, pairLink: `${base}/pair#anything`, stop: () => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }) };
 }
 
-export async function startWorld({ width = 724, height = 784, aiStaleMs = DEFAULT_AI_STALE_MS } = {}) {
+export async function startWorld({ width = 724, height = 784, aiStaleMs = DEFAULT_AI_STALE_MS, silentInjection = false } = {}) {
   const pagesDir = path.join(HERE, 'pages');
   const site = http.createServer((req, res) => {
     const name = (req.url.split('?')[0].replace(/^\//, '') || 'plain') + '.html';
@@ -169,7 +180,7 @@ export async function startWorld({ width = 724, height = 784, aiStaleMs = DEFAUL
   const relayBase = `http://127.0.0.1:${relayPort}`;
   const relayOptions = { port: relayPort, dataDir, domain: RELAY_DOMAIN, version: 'e2e' };
   let relay = await startRelay(relayOptions);
-  const extension = buildExtension(relayPort, aiStaleMs);
+  const extension = buildExtension(relayPort, aiStaleMs, { silentInjection });
   const context = await chromium.launchPersistentContext('', {
     executablePath: chromiumPath(), headless: false,
     args: ['--headless=new', '--no-sandbox', `--host-resolver-rules=MAP ${OPEN_HOST} 127.0.0.1`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
