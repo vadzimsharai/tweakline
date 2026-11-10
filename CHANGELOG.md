@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 - 2026-11-10
+
+**Live edits**
+- CSS and JavaScript from the AI now work in browsers that accept the injection but do nothing with it, as Vivaldi on Android did: they used to answer "applied" while the page stayed the same.
+- `css` reads its effect back from the page. When the browser ignores the injected style, the CSS goes into a stylesheet on the page instead; the answer says which way it took (`"via":"user"` or `"via":"sheet"`), and `undo` removes either.
+- `js` counts as run only when the code itself reports that it started. When user scripts are off or silent, the code runs in the page's own world through `scripting`, and through `debugger` only when the page's Content-Security-Policy forbids `eval`.
+- Saved CSS patches take the same way, so they apply on those browsers too.
+- When nothing works, the answer is an error with the reason, never "applied".
+
 ## 0.1.0 - 2026-11-09
 
 First public release.

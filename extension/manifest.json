@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tweakline",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Notes, chat with any AI, quick page edits and patches right on the page.",
   "minimum_chrome_version": "116",
   "permissions": ["tabs", "webNavigation", "scripting", "storage", "debugger", "alarms", "userScripts", "clipboardWrite", "unlimitedStorage"],
